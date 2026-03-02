@@ -2,7 +2,7 @@
 
 import html
 from pathlib import Path
-import os
+from urllib.parse import quote
 
 from src.config import DATA_DIR
 
@@ -12,32 +12,8 @@ def _is_image_url(url: str) -> bool:
     return lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")) # if the url ends with one of these extensions, it is an image
 
 
-def _is_wsl() -> bool:
-    try:
-        return "microsoft" in os.uname().release.lower() or "wsl" in os.uname().release.lower()
-    except AttributeError:
-        return False
-
-
-# This method just converts the wsl file path to the actual file path (not using the mnt prefix)
-def _wsl_file_uri_to_windows(uri: str) -> str:
-    prefix = "file:///mnt/"
-    if not uri.startswith(prefix) or len(uri) <= len(prefix):
-        return uri
-
-    drive_letter = uri[len(prefix)]
-    if drive_letter < "a" or drive_letter > "z":
-        return uri
-
-    rest = uri[len(prefix) + 1:]
-    return f"file:///{drive_letter.upper()}:{rest}"
-
-
 def viewer_path_to_uri(path: Path) -> str:
-    uri = path.as_uri()
-    if _is_wsl():
-        return _wsl_file_uri_to_windows(uri)
-    return uri
+    return path.as_uri()
 
 
 def build_apod_viewer(apod: dict) -> Path:
@@ -63,9 +39,14 @@ def build_apod_viewer(apod: dict) -> Path:
     safe_url = html.escape(url)
     safe_explanation = html.escape(explanation)
 
+    encoded_media_url = quote(url, safe=":/?=&%.-_~")
+    encoded_date = quote(str(date), safe="-")
+    download_href = f"/download?date={encoded_date}&media_url={encoded_media_url}"
+
     download_label = "Save this APOD media"
     if not _is_image_url(url):
         download_label = "Open source media"
+
 
     filename = f"apod-{date}.html"
     file_path = viewer_dir / filename
@@ -195,7 +176,7 @@ def build_apod_viewer(apod: dict) -> Path:
     <div class="date">{html.escape(date)}</div>
     <div class="hint">Hover the image to see the explanation.</div>
     <div class="actions">
-      <a href="{safe_url}" target="_blank" rel="noreferrer" download="apod-{html.escape(date)}">{download_label}</a>
+      <a href="{download_href}" id="save-apod-media">{download_label}</a>
       <div class="hint">If download does not start automatically, open the media and save manually.</div>
     </div>
     <div class="media-wrap">
