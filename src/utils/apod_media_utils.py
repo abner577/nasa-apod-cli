@@ -35,11 +35,11 @@ CONTENT_TYPE_TO_EXT = {
 
 
 def get_apod_download_dir() -> Path:
-    """Return the folder where APOD media files should be saved on this machine.
+    """Return the folder where APOD media files should be saved on the machine.
 
-    In plain terms, this picks the user's Downloads folder in a way that works
+    This picks the user's Downloads folder in a way that works
     across Windows, Linux/macOS, and WSL environments. It also makes sure the
-    folder exists before returning it, so callers can write files immediately.
+    folder exists before returning it.
     """
     # Save to the user's system-level Downloads folder.
     if os.name == "nt":
@@ -195,10 +195,6 @@ def build_download_path(date_value: str, extension: str) -> Path:
 
 def check_if_date_file_exists(date_value: str) -> bool:
     """Check whether any previously downloaded file already exists for an APOD date.
-
-    This is used to avoid duplicate saves for the same day. It scans the target
-    Downloads directory for files that start with ``apod-<date>`` and returns
-    ``True`` as soon as one is found.
     """
     download_dir = get_apod_download_dir()
     for existing_file in download_dir.glob(f"apod-{date_value}*"):
@@ -208,13 +204,7 @@ def check_if_date_file_exists(date_value: str) -> bool:
 
 
 def download_apod_file(apod_data: dict) -> str | None:
-    """Download APOD media to disk and return the saved file path when successful.
-
-    In plain English, this function validates the APOD date, skips duplicate
-    date downloads, chooses a media URL, downloads the content in chunks, saves
-    the file in Downloads, and prints a clear success or failure message.
-    If anything important is missing or fails, it returns ``None``.
-    """
+    """Download APOD media to disk and return the saved file path when successful."""
     date_value = str(apod_data.get("date", "")).strip()
     if not date_value:
         return None
@@ -267,12 +257,7 @@ def download_apod_file(apod_data: dict) -> str | None:
 
 
 def maybe_download_apod_file(apod_data: dict, save_enabled: bool) -> str | None:
-    """Conditionally download APOD media based on the current save preference.
-
-    This acts as a small guard: when saving is disabled it immediately returns
-    ``None``; when enabled it delegates to ``download_apod_file`` and returns
-    that result unchanged.
-    """
+    """Conditionally download APOD media based on the current save preference."""
     if not save_enabled:
         return None
     return download_apod_file(apod_data)

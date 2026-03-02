@@ -22,7 +22,7 @@ _server_started = False
 def _safe_viewer_file(file_name: str) -> Path | None:
     """Resolve a viewer HTML file only when the request stays inside the viewer folder.
 
-    In plain English, this function protects the local server from serving
+    This function protects the local server from serving
     random files on disk. It builds a path under ``data/viewer``, verifies the
     final resolved path is still inside that folder, and confirms the target is
     an existing file before returning it. If anything looks unsafe or missing,
@@ -44,7 +44,7 @@ class _ViewerRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         """Route each GET request to the correct local viewer endpoint.
 
-        Practically speaking, this is the traffic controller for the tiny local
+        This is the traffic controller for the tiny local
         HTTP server. It checks the incoming URL path and sends viewer-page
         requests to the HTML-serving handler, download requests to the media
         proxy handler, and returns a 404 for everything else.
@@ -65,8 +65,6 @@ class _ViewerRequestHandler(BaseHTTPRequestHandler):
         """Silence default request logging from ``BaseHTTPRequestHandler``.
 
         The built-in handler normally prints every HTTP request to stderr.
-        For this app, that extra noise is not useful for normal CLI use, so
-        this override intentionally does nothing.
         """
         return
 
@@ -93,7 +91,7 @@ class _ViewerRequestHandler(BaseHTTPRequestHandler):
     def _serve_download(self, query: str) -> None:
         """Fetch APOD media from NASA URLs and stream it as a browser download.
 
-        In practical terms, this endpoint acts like a controlled relay: it
+        This endpoint acts like a controlled relay: it
         validates the query parameters, rejects unsafe or malformed inputs,
         downloads the remote media file, infers a reasonable file extension,
         sets download-friendly headers, and streams bytes to the client in
@@ -142,8 +140,7 @@ def start_viewer_server() -> None:
     """Start the local threaded viewer server once per process.
 
     This uses a lock and a boolean guard so repeated calls do not create extra
-    server instances. On first call, it binds the configured host/port,
-    launches the server loop on a daemon thread, and marks startup complete.
+    server instances.
     """
     global _server_started
 
@@ -161,7 +158,7 @@ def start_viewer_server() -> None:
 def viewer_http_url(file_name: str) -> str:
     """Build the localhost URL that opens a saved viewer HTML file.
 
-    In other words, this is a convenience helper that turns a viewer file name
+    This is a helper that turns a viewer file name
     into the exact ``http://127.0.0.1:<port>/viewer/...`` link the browser can
     open against the local server.
     """
