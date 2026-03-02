@@ -3,7 +3,7 @@
 import html
 import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote
 
 from src.config import DATA_DIR
 
@@ -11,14 +11,6 @@ from src.config import DATA_DIR
 def _is_image_url(url: str) -> bool:
     lower = url.lower()
     return lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")) # if the url ends with one of these extensions, it is an image
-
-
-def _extract_extension_from_url(url: str) -> str:
-    parsed = urlparse(url)
-    suffix = Path(parsed.path).suffix.lower()
-    if suffix:
-        return suffix
-    return ".bin"
 
 
 def _is_wsl() -> bool:
@@ -72,11 +64,14 @@ def build_apod_viewer(apod: dict) -> Path:
     safe_url = html.escape(url)
     safe_explanation = html.escape(explanation)
 
+    encoded_media_url = quote(url, safe=":/?=&%.-_~")
+    encoded_date = quote(str(date), safe="-")
+    download_href = f"/download?date={encoded_date}&media_url={encoded_media_url}"
+
     download_label = "Save this APOD media"
     if not _is_image_url(url):
         download_label = "Open source media"
 
-    fallback_extension = _extract_extension_from_url(url)
 
     filename = f"apod-{date}.html"
     file_path = viewer_dir / filename
@@ -143,16 +138,10 @@ def build_apod_viewer(apod: dict) -> Path:
     .actions {{
       margin-bottom: 16px;
     }}
-    .actions a,
-    .actions button {{
+    .actions a {{
       color: var(--accent);
       text-decoration: none;
       font-size: 14px;
-      background: transparent;
-      border: 0;
-      cursor: pointer;
-      padding: 0;
-      font-family: inherit;
     }}
     .media-wrap {{
       display: inline-block;
@@ -212,7 +201,7 @@ def build_apod_viewer(apod: dict) -> Path:
     <div class="date">{html.escape(date)}</div>
     <div class="hint">Hover the image to see the explanation.</div>
     <div class="actions">
-      <button id="save-apod-media" type="button" data-media-url="{safe_url}" data-filename="apod-{html.escape(date)}{fallback_extension}">{download_label}</button>
+      <a href="{download_href}" id="save-apod-media">{download_label}</a>
       <div class="hint">If download does not start automatically, open the media and save manually.</div>
     </div>
     <div class="media-wrap">
@@ -225,40 +214,12 @@ def build_apod_viewer(apod: dict) -> Path:
     (function() {{
       var media = document.getElementById("apod-media");
       var explanation = document.getElementById("apod-explanation");
-      var saveButton = document.getElementById("save-apod-media");
       if (!media || !explanation) return;
       media.addEventListener("mouseenter", function() {{
         explanation.classList.add("visible");
       }});
       media.addEventListener("mouseleave", function() {{
         explanation.classList.remove("visible");
-      }});
-
-      if (!saveButton) return;
-      saveButton.addEventListener("click", async function() {{
-        var mediaUrl = saveButton.getAttribute("data-media-url");
-        var filename = saveButton.getAttribute("data-filename") || "apod-media";
-
-        if (!mediaUrl) return;
-
-        try {{
-          var response = await fetch(mediaUrl, {{ mode: "cors" }});
-          if (!response.ok) {{
-            throw new Error("Unable to download media");
-          }}
-
-          var fileBlob = await response.blob();
-          var objectUrl = URL.createObjectURL(fileBlob);
-          var link = document.createElement("a");
-          link.href = objectUrl;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          URL.revokeObjectURL(objectUrl);
-        }} catch (error) {{
-          window.location.href = mediaUrl;
-        }}
       }});
     }})();
   </script>
