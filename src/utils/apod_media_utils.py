@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+from html import unescape
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import requests
 from rich.text import Text
@@ -171,6 +173,55 @@ def infer_extension(response: requests.Response, url: str) -> str:
     return ".bin"
 
 
+def _normalize_escaped_url(raw_url: str) -> str:
+    """Convert escaped URL fragments from HTML/JSON blobs into normal URLs."""
+    normalized = raw_url.strip().strip('"\'')
+    normalized = normalized.replace("\\/", "/")
+    normalized = normalized.replace("\\u0026", "&")
+    normalized = normalized.replace("\\u003d", "=")
+    normalized = normalized.replace("\\u0025", "%")
+    normalized = unescape(normalized)
+    return normalized
+
+
+def _extract_video_url_from_page(page_url: str) -> str | None:
+    """Attempt to locate a direct downloadable video URL from an embed page.
+
+    Some APOD video entries point to HTML embed pages (commonly YouTube). In
+    those cases, the initial media request downloads page markup instead of the
+    actual video stream. This helper scans page content for direct media links
+    and returns the first plausible candidate.
+    """
+    try:
+        page_response = requests.get(page_url, timeout=20)
+        page_response.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    page_content = page_response.text
+
+    direct_media_match = re.search(
+        r"https?://[^\s\"'<>]+(?:\.mp4|\.webm|\.mov)(?:\?[^\s\"'<>]*)?",
+        page_content,
+        flags=re.IGNORECASE,
+    )
+    if direct_media_match:
+        return direct_media_match.group(0)
+
+    escaped_googlevideo_match = re.search(
+        r"https(?::\\/\\/|://)[^\"'\s]+googlevideo\.com[^\"'\s]+",
+        page_content,
+        flags=re.IGNORECASE,
+    )
+    if escaped_googlevideo_match:
+        normalized = _normalize_escaped_url(escaped_googlevideo_match.group(0))
+        normalized = unquote(normalized)
+        if normalized.startswith("http://") or normalized.startswith("https://"):
+            return normalized
+
+    return None
+
+
 def build_download_path(date_value: str, extension: str) -> Path:
     """Build a non-conflicting destination path for a media file download.
 
@@ -238,6 +289,17 @@ def download_apod_file(apod_data: dict) -> str | None:
         response.raise_for_status()
 
         extension = infer_extension(response, media_url)
+
+        media_type = str(apod_data.get("media_type", "")).strip().lower()
+        if extension == ".bin" and media_type == "video":
+            fallback_video_url = _extract_video_url_from_page(media_url)
+            if fallback_video_url:
+                response.close()
+                media_url = fallback_video_url
+                response = requests.get(media_url, stream=True, timeout=20)
+                response.raise_for_status()
+                extension = infer_extension(response, media_url)
+
         file_path = build_download_path(date_value, extension)
 
         with open(file_path, "wb") as output_file:
