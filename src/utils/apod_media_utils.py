@@ -300,6 +300,11 @@ def download_apod_file(apod_data: dict) -> str | None:
                 response.raise_for_status()
                 extension = infer_extension(response, media_url)
 
+            # If APOD marks this entry as video but no direct extension can be
+            # inferred, default to mp4 instead of generic binary naming.
+            if extension == ".bin":
+                extension = ".mp4"
+
         file_path = build_download_path(date_value, extension)
 
         with open(file_path, "wb") as output_file:
