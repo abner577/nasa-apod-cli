@@ -14,6 +14,27 @@ def _is_image_url(url: str) -> bool:
     return lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")) # if the url ends with one of these extensions, it is an image
 
 
+def _is_direct_video_url(url: str) -> bool:
+    """Return True when the URL path points to a direct video file."""
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    return path.endswith((".mp4", ".webm", ".mov", ".m4v", ".avi", ".mkv"))
+
+
+def _is_youtube_video_url(url: str) -> bool:
+    """Return True when the URL is a YouTube video URL with a detectable ID."""
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().replace("www.", "")
+    is_youtube_host = (
+        host == "youtu.be"
+        or host.endswith(".youtube.com")
+        or host == "youtube.com"
+        or host.endswith(".youtube-nocookie.com")
+        or host == "youtube-nocookie.com"
+    )
+    return is_youtube_host and bool(_extract_youtube_video_id(url))
+
+
 def _extract_youtube_video_id(url: str) -> str:
     """Extract a YouTube video ID from common APOD YouTube URL formats."""
     parsed = urlparse(url)
@@ -98,11 +119,17 @@ def build_apod_viewer(apod: dict) -> Path:
     explanation = apod.get("explanation", "")
     media_type = str(apod.get("media_type", "")).strip().lower()
     is_video = media_type == "video"
+    is_youtube_video = _is_youtube_video_url(url)
 
     safe_title = html.escape(title)
-    effective_url = _youtube_watch_url(url) if is_video else url
+    effective_url = _youtube_watch_url(url) if is_youtube_video else url
     safe_url = html.escape(effective_url)
     safe_explanation = html.escape(explanation)
+
+    # print(f"Media type: {media_type}")
+    # print(f"Raw url: {url}")
+    # print(f"Safe url: {safe_url}")
+    # print(f"Effective url: {effective_url}")
 
     filename = f"apod-{date}.html"
     file_path = viewer_dir / filename
@@ -114,14 +141,21 @@ def build_apod_viewer(apod: dict) -> Path:
             f'alt="{safe_title}" />'
         )
     elif is_video:
-        thumbnail_url = _youtube_thumbnail_url(url)
+        thumbnail_url = _youtube_thumbnail_url(url) if is_youtube_video else ""
 
         if thumbnail_url:
             safe_thumbnail_url = html.escape(thumbnail_url)
             media_html = (
-                f'<a href="{safe_url}" target="_blank" rel="noreferrer">'
-                f'<img id="apod-media" class="apod-image" src="{safe_thumbnail_url}" alt="{safe_title}" />'
-                "</a>"
+                 f'<a href="{safe_url}" target="_blank" rel="noreferrer">'
+                 f'<img id="apod-media" class="apod-image" src="{safe_thumbnail_url}" alt="{safe_title}" />'
+                 "</a>"
+             )
+        elif _is_direct_video_url(url):
+            media_html = (
+                '<video id="apod-media" class="apod-image" controls preload="metadata">'
+                f'<source src="{safe_url}">'
+                "Your browser does not support the video tag."
+                "</video>"
             )
         else:
             media_html = (
@@ -139,12 +173,18 @@ def build_apod_viewer(apod: dict) -> Path:
         )
 
     video_notice_html = ""
-    if is_video:
+    youtube_action_html = ""
+
+    if is_youtube_video:
         video_notice_html = (
             '<div class="video-download-notice">'
-            "This APOD is a video source, and cannot be automatically downloaded. "
-            "Click Open APOD media to view the APOD and save manually."
+            "This APOD is hosted on YouTube, so automatic download is not available. "
+            "Click the preview image or use the button below to watch it on YouTube."
             "</div>"
+        )
+        youtube_action_html = (
+            '<a class="youtube-watch-button" '
+            f'href="{safe_url}" target="_blank" rel="noreferrer">Watch on YouTube</a>'
         )
 
     html_content = f"""<!doctype html>
@@ -211,6 +251,29 @@ def build_apod_viewer(apod: dict) -> Path:
       color: var(--accent);
       text-decoration: none;
       font-size: 15px;
+    }}
+    .actions .youtube-watch-button {{
+      display: inline-block;
+      padding: 6px 13px;
+      border-radius: 999px;
+      border: 1px solid rgba(126, 168, 205, 0.95);
+      background: linear-gradient(180deg, rgba(79, 98, 120, 0.95), rgba(52, 67, 84, 0.95));
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1px;
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
+      text-decoration: none;
+      transition: transform 120ms ease, filter 120ms ease;
+    }}
+    .actions .youtube-watch-button:visited,
+    .actions .youtube-watch-button:hover,
+    .actions .youtube-watch-button:active {{
+      color: #ffffff;
+    }}
+    .actions .youtube-watch-button:hover {{
+      transform: translateY(-1px);
+      filter: brightness(1.06);
     }}
     .media-wrap {{
       display: inline-block;
@@ -283,6 +346,7 @@ def build_apod_viewer(apod: dict) -> Path:
     <div class="hint">Hover the image to see the explanation.</div>
     {video_notice_html}
     <div class="actions">
+      {youtube_action_html}
     </div>
     <div class="media-wrap">
       {media_html}
