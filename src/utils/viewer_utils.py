@@ -252,20 +252,26 @@ def build_apod_viewer(apod: dict) -> Path:
       text-decoration: none;
       font-size: 15px;
     }}
-    .youtube-watch-button {{
+    .actions .youtube-watch-button {{
       display: inline-block;
       padding: 6px 13px;
       border-radius: 999px;
       border: 1px solid rgba(126, 168, 205, 0.95);
       background: linear-gradient(180deg, rgba(79, 98, 120, 0.95), rgba(52, 67, 84, 0.95));
+      color: #ffffff;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.1px;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
       text-decoration: none;
       transition: transform 120ms ease, filter 120ms ease;
     }}
-    .youtube-watch-button:hover {{
+    .actions .youtube-watch-button:visited,
+    .actions .youtube-watch-button:hover,
+    .actions .youtube-watch-button:active {{
+      color: #ffffff;
+    }}
+    .actions .youtube-watch-button:hover {{
       transform: translateY(-1px);
       filter: brightness(1.06);
     }}
