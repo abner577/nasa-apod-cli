@@ -14,6 +14,27 @@ def _is_image_url(url: str) -> bool:
     return lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")) # if the url ends with one of these extensions, it is an image
 
 
+def _is_direct_video_url(url: str) -> bool:
+    """Return True when the URL path points to a direct video file."""
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    return path.endswith((".mp4", ".webm", ".mov", ".m4v", ".avi", ".mkv"))
+
+
+def _is_youtube_video_url(url: str) -> bool:
+    """Return True when the URL is a YouTube video URL with a detectable ID."""
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().replace("www.", "")
+    is_youtube_host = (
+        host == "youtu.be"
+        or host.endswith(".youtube.com")
+        or host == "youtube.com"
+        or host.endswith(".youtube-nocookie.com")
+        or host == "youtube-nocookie.com"
+    )
+    return is_youtube_host and bool(_extract_youtube_video_id(url))
+
+
 def _extract_youtube_video_id(url: str) -> str:
     """Extract a YouTube video ID from common APOD YouTube URL formats."""
     parsed = urlparse(url)
@@ -97,12 +118,18 @@ def build_apod_viewer(apod: dict) -> Path:
     url = apod.get("url", "")
     explanation = apod.get("explanation", "")
     media_type = str(apod.get("media_type", "")).strip().lower()
+    print(f"Media type: {media_type}")
+    print(f"Raw url: {url}")
     is_video = media_type == "video"
+    is_youtube_video = _is_youtube_video_url(url)
 
     safe_title = html.escape(title)
-    effective_url = _youtube_watch_url(url) if is_video else url
+    effective_url = _youtube_watch_url(url) if is_youtube_video else url
     safe_url = html.escape(effective_url)
     safe_explanation = html.escape(explanation)
+
+    print(f"Safe url: {safe_url}")
+    print(f"Effective url: {effective_url}")
 
     filename = f"apod-{date}.html"
     file_path = viewer_dir / filename
@@ -114,14 +141,21 @@ def build_apod_viewer(apod: dict) -> Path:
             f'alt="{safe_title}" />'
         )
     elif is_video:
-        thumbnail_url = _youtube_thumbnail_url(url)
+        thumbnail_url = _youtube_thumbnail_url(url) if is_youtube_video else ""
 
         if thumbnail_url:
             safe_thumbnail_url = html.escape(thumbnail_url)
             media_html = (
-                f'<a href="{safe_url}" target="_blank" rel="noreferrer">'
-                f'<img id="apod-media" class="apod-image" src="{safe_thumbnail_url}" alt="{safe_title}" />'
-                "</a>"
+                 f'<a href="{safe_url}" target="_blank" rel="noreferrer">'
+                 f'<img id="apod-media" class="apod-image" src="{safe_thumbnail_url}" alt="{safe_title}" />'
+                 "</a>"
+             )
+        elif _is_direct_video_url(url):
+            media_html = (
+                '<video id="apod-media" class="apod-image" controls preload="metadata">'
+                f'<source src="{safe_url}">'
+                "Your browser does not support the video tag."
+                "</video>"
             )
         else:
             media_html = (
@@ -139,10 +173,11 @@ def build_apod_viewer(apod: dict) -> Path:
         )
 
     video_notice_html = ""
-    if is_video:
+
+    if is_youtube_video:
         video_notice_html = (
             '<div class="video-download-notice">'
-            "This APOD is a video source, and cannot be automatically downloaded. "
+            "This APOD is a youtube video, and cannot be automatically downloaded. "
             "Click Open APOD media to view the APOD and save manually."
             "</div>"
         )
