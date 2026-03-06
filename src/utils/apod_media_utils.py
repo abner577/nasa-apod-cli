@@ -9,6 +9,7 @@ from html import unescape
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+
 import requests
 from rich.text import Text
 
@@ -192,13 +193,19 @@ def _extract_video_url_from_page(page_url: str) -> str | None:
     actual video stream. This helper scans page content for direct media links
     and returns the first plausible candidate.
     """
+    _debug_video(f"Inspecting embed page for direct media URL: {page_url}")
+
     try:
         page_response = requests.get(page_url, timeout=20)
         page_response.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as error:
+        _debug_video(f"Embed page request failed: {error}")
         return None
 
     page_content = page_response.text
+    _debug_video(
+        f"Embed response status={page_response.status_code}, content-type={page_response.headers.get('content-type', '')}"
+    )
 
     direct_media_match = re.search(
         r"https?://[^\s\"'<>]+(?:\.mp4|\.webm|\.mov)(?:\?[^\s\"'<>]*)?",
@@ -206,7 +213,9 @@ def _extract_video_url_from_page(page_url: str) -> str | None:
         flags=re.IGNORECASE,
     )
     if direct_media_match:
-        return direct_media_match.group(0)
+        extracted_url = direct_media_match.group(0)
+        _debug_video(f"Matched direct media URL from page: {extracted_url[:180]}")
+        return extracted_url
 
     escaped_googlevideo_match = re.search(
         r"https(?::\\/\\/|://)[^\"'\s]+googlevideo\.com[^\"'\s]+",
@@ -217,9 +226,16 @@ def _extract_video_url_from_page(page_url: str) -> str | None:
         normalized = _normalize_escaped_url(escaped_googlevideo_match.group(0))
         normalized = unquote(normalized)
         if normalized.startswith("http://") or normalized.startswith("https://"):
+            _debug_video(f"Matched escaped googlevideo URL from page: {normalized[:180]}")
             return normalized
 
+    _debug_video("No direct video URL found in embed page.")
     return None
+
+
+def _debug_video(message: str) -> None:
+    """Emit debug logs for APOD video download troubleshooting."""
+    print(f"[DEBUG_VIDEO] {message}")
 
 
 def build_download_path(date_value: str, extension: str) -> Path:
@@ -285,33 +301,61 @@ def download_apod_file(apod_data: dict) -> str | None:
         return None
 
     try:
+        media_type = str(apod_data.get("media_type", "")).strip().lower()
+        if media_type == "video":
+            _debug_video(f"Initial APOD media URL: {media_url}")
+
         response = requests.get(media_url, stream=True, timeout=20)
         response.raise_for_status()
 
         extension = infer_extension(response, media_url)
 
-        media_type = str(apod_data.get("media_type", "")).strip().lower()
+        if media_type == "video":
+            _debug_video(
+                "Initial response details: "
+                f"status={response.status_code}, final_url={response.url}, "
+                f"content-type={response.headers.get('content-type', '')}, "
+                f"content-length={response.headers.get('content-length', '')}, "
+                f"inferred_extension={extension}"
+            )
+
         if extension == ".bin" and media_type == "video":
+            _debug_video("Inferred .bin for video APOD. Attempting fallback URL extraction.")
             fallback_video_url = _extract_video_url_from_page(media_url)
             if fallback_video_url:
                 response.close()
                 media_url = fallback_video_url
+                _debug_video(f"Retrying video download with fallback URL: {media_url[:220]}")
                 response = requests.get(media_url, stream=True, timeout=20)
                 response.raise_for_status()
                 extension = infer_extension(response, media_url)
-
-            # If APOD marks this entry as video but no direct extension can be
-            # inferred, default to mp4 instead of generic binary naming.
-            if extension == ".bin":
-                extension = ".mp4"
+                _debug_video(
+                    "Fallback response details: "
+                    f"status={response.status_code}, final_url={response.url}, "
+                    f"content-type={response.headers.get('content-type', '')}, "
+                    f"content-length={response.headers.get('content-length', '')}, "
+                    f"inferred_extension={extension}"
+                )
+            else:
+                _debug_video("Fallback URL extraction returned no candidate URL.")
 
         file_path = build_download_path(date_value, extension)
 
+        first_chunk_logged = False
         with open(file_path, "wb") as output_file:
             for chunk in response.iter_content(chunk_size=8192):
                 if not chunk:
                     continue
+
+                if media_type == "video" and not first_chunk_logged:
+                    hex_preview = chunk[:32].hex()
+                    _debug_video(f"First 32 bytes hex preview: {hex_preview}")
+                    first_chunk_logged = True
+
                 output_file.write(chunk)
+
+        if media_type == "video" and not first_chunk_logged:
+            _debug_video("No data chunks were received while saving video file.")
 
         msg = Text("Saved file: ", style="app.secondary")
         msg.append(file_path.name, style="body.text")
