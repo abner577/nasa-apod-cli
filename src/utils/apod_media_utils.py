@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+from html import unescape
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
+
 
 import requests
 from rich.text import Text
@@ -171,6 +174,76 @@ def infer_extension(response: requests.Response, url: str) -> str:
     return ".bin"
 
 
+def _normalize_escaped_url(raw_url: str) -> str:
+    """Convert escaped URL fragments from HTML/JSON blobs into normal URLs."""
+    normalized = raw_url.strip().strip('"\'')
+    normalized = normalized.replace("\\/", "/")
+    normalized = normalized.replace("\\u0026", "&")
+    normalized = normalized.replace("\\u003d", "=")
+    normalized = normalized.replace("\\u0025", "%")
+    normalized = unescape(normalized)
+    return normalized
+
+
+def _extract_video_url_from_page(page_url: str) -> str | None:
+    """Attempt to locate a direct downloadable video URL from an embed page.
+
+    Some APOD video entries point to HTML embed pages (commonly YouTube). In
+    those cases, the initial media request downloads page markup instead of the
+    actual video stream. This helper scans page content for direct media links
+    and returns the first plausible candidate.
+    """
+    _debug_video(f"Inspecting embed page for direct media URL: {page_url}")
+
+    try:
+        page_response = requests.get(page_url, timeout=20)
+        page_response.raise_for_status()
+    except requests.RequestException as error:
+        _debug_video(f"Embed page request failed: {error}")
+        return None
+
+    page_content = page_response.text
+    _debug_video(
+        f"Embed response status={page_response.status_code}, content-type={page_response.headers.get('content-type', '')}"
+    )
+
+    direct_media_match = re.search(
+        r"https?://[^\s\"'<>]+(?:\.mp4|\.webm|\.mov)(?:\?[^\s\"'<>]*)?",
+        page_content,
+        flags=re.IGNORECASE,
+    )
+    if direct_media_match:
+        extracted_url = direct_media_match.group(0)
+        _debug_video(f"Matched direct media URL from page: {extracted_url[:180]}")
+        return extracted_url
+
+    escaped_googlevideo_match = re.search(
+        r"https(?::\\/\\/|://)[^\"'\s]+googlevideo\.com[^\"'\s]+",
+        page_content,
+        flags=re.IGNORECASE,
+    )
+    if escaped_googlevideo_match:
+        normalized = _normalize_escaped_url(escaped_googlevideo_match.group(0))
+        normalized = unquote(normalized)
+        if normalized.startswith("http://") or normalized.startswith("https://"):
+            _debug_video(f"Matched escaped googlevideo URL from page: {normalized[:180]}")
+            return normalized
+
+    _debug_video("No direct video URL found in embed page.")
+    return None
+
+
+def _get_content_type(response: requests.Response) -> str:
+    """Return a normalized content-type value without parameters."""
+    return response.headers.get("content-type", "").split(";")[0].strip().lower()
+
+
+def _debug_video(message: str) -> None:
+    """Emit debug logs for APOD video download troubleshooting.
+       Uncomment this to enable debugging."""
+    # print(f"[DEBUG_VIDEO] {message}")
+
+
 def build_download_path(date_value: str, extension: str) -> Path:
     """Build a non-conflicting destination path for a media file download.
 
@@ -210,7 +283,7 @@ def check_if_date_file_exists(date_value: str) -> bool:
 def download_apod_file(apod_data: dict) -> str | None:
     """Download APOD media to disk and return the saved file path when successful.
 
-    In plain English, this function validates the APOD date, skips duplicate
+    This function validates the APOD date, skips duplicate
     date downloads, chooses a media URL, downloads the content in chunks, saves
     the file in Downloads, and prints a clear success or failure message.
     If anything important is missing or fails, it returns ``None``.
@@ -234,17 +307,83 @@ def download_apod_file(apod_data: dict) -> str | None:
         return None
 
     try:
+        media_type = str(apod_data.get("media_type", "")).strip().lower()
+        if media_type == "video":
+            _debug_video(f"Initial APOD media URL: {media_url}")
+
         response = requests.get(media_url, stream=True, timeout=20)
         response.raise_for_status()
 
         extension = infer_extension(response, media_url)
+
+        if media_type == "video":
+            _debug_video(
+                "Initial response details: "
+                f"status={response.status_code}, final_url={response.url}, "
+                f"content-type={response.headers.get('content-type', '')}, "
+                f"content-length={response.headers.get('content-length', '')}, "
+                f"inferred_extension={extension}"
+            )
+
+        if extension == ".bin" and media_type == "video":
+            _debug_video("Inferred .bin for video APOD. Attempting fallback URL extraction.")
+            fallback_video_url = _extract_video_url_from_page(media_url)
+            if fallback_video_url:
+                response.close()
+                media_url = fallback_video_url
+                _debug_video(f"Retrying video download with fallback URL: {media_url[:220]}")
+                response = requests.get(media_url, stream=True, timeout=20)
+                response.raise_for_status()
+                extension = infer_extension(response, media_url)
+                _debug_video(
+                    "Fallback response details: "
+                    f"status={response.status_code}, final_url={response.url}, "
+                    f"content-type={response.headers.get('content-type', '')}, "
+                    f"content-length={response.headers.get('content-length', '')}, "
+                    f"inferred_extension={extension}"
+                )
+            else:
+                _debug_video("Fallback URL extraction returned no candidate URL.")
+
+        if media_type == "video":
+            content_type = _get_content_type(response)
+            if not content_type.startswith("video/"):
+                _debug_video(
+                    "Skipping save because response is not a direct video stream: "
+                    f"content-type={content_type or '<empty>'}, final_url={response.url}"
+                )
+                msg = Text("Skipped (video APOD): ", style="app.secondary")
+                msg.append(
+                    "This APOD is a video source, and cannot be automatically downloaded. "
+                    "Click ",
+                    style="body.text",
+                )
+                msg.append("'Open APOD media' ", style="app.primary")
+                msg.append("in browser and save manually.", style="body.text")
+                console.print(msg)
+                return None
+
+            if extension == ".bin":
+                _debug_video("Video stream detected with ambiguous extension; defaulting to .mp4")
+                extension = ".mp4"
+
         file_path = build_download_path(date_value, extension)
 
+        first_chunk_logged = False
         with open(file_path, "wb") as output_file:
             for chunk in response.iter_content(chunk_size=8192):
                 if not chunk:
                     continue
+
+                if media_type == "video" and not first_chunk_logged:
+                    hex_preview = chunk[:32].hex()
+                    _debug_video(f"First 32 bytes hex preview: {hex_preview}")
+                    first_chunk_logged = True
+
                 output_file.write(chunk)
+
+        if media_type == "video" and not first_chunk_logged:
+            _debug_video("No data chunks were received while saving video file.")
 
         msg = Text("Saved file: ", style="app.secondary")
         msg.append(file_path.name, style="body.text")
