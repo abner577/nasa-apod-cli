@@ -28,7 +28,7 @@ from src.storage.json_storage import (
 )
 from src.utils.browser_utils import take_user_to_browser
 from src.utils.data_utils import format_apod_data
-from src.utils.apod_media_utils import maybe_download_apod_file, get_existing_date_file_path
+from src.utils.apod_media_utils import maybe_download_apod_file, _get_existing_local_file_path
 from src.user_settings import (
     get_automatically_save_apod_files,
     get_automatically_redirect_setting,
@@ -37,19 +37,6 @@ from src.user_settings import (
 from src.config import NASA_APOD_START_DATE
 
 load_dotenv()
-
-
-def _get_existing_local_file_path(apod_data: dict[str, Any]) -> str:
-    """Resolve a previously saved local Downloads path for an APOD entry."""
-    date_value = str(apod_data.get("date", "")).strip()
-    if not date_value:
-        return ""
-
-    existing_path = get_existing_date_file_path(date_value)
-    if existing_path is None:
-        return ""
-
-    return existing_path
 
 
 NASA_API_KEY = os.getenv('NASA_API_KEY')

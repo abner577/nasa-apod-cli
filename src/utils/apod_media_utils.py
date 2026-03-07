@@ -297,6 +297,19 @@ def get_existing_date_file_path(date_value: str) -> str | None:
     return str(matches[0])
 
 
+def _get_existing_local_file_path(apod_data: dict[str, Any]) -> str:
+    """Resolve a previously saved local Downloads path for an APOD entry."""
+    date_value = str(apod_data.get("date", "")).strip()
+    if not date_value:
+        return ""
+
+    existing_path = get_existing_date_file_path(date_value)
+    if existing_path is None:
+        return ""
+
+    return existing_path
+
+
 def download_apod_file(apod_data: dict) -> str | None:
     """Download APOD media to disk and return the saved file path when successful.
 
