@@ -59,8 +59,8 @@ def apply_auto_wallpaper_for_single_apod(apod_data: dict[str, Any]) -> None:
         success = _set_wallpaper_through_wsl(local_image_path)
 
     if success:
-        msg = Text("Wallpaper updated: ", style="ok")
-        msg.append(local_image_path.name, style="body.text")
+        msg = Text("Success: ", style="ok")
+        msg.append("Wallpaper was updated", style="body.text")
         msg.append(" ✓", style="ok")
         console.print(msg)
     else:
@@ -75,9 +75,6 @@ def _resolve_or_download_image_for_date(apod_data: dict[str, Any], date_value: s
     if existing_file:
         existing_path = Path(existing_file)
         if existing_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".tiff"}:
-            msg = Text("Using existing APOD image: ", style="app.secondary")
-            msg.append(existing_path.name, style="body.text")
-            console.print(msg)
             return existing_path
 
     media_url = resolve_direct_media_url(apod_data)

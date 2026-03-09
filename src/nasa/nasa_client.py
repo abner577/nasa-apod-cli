@@ -113,6 +113,7 @@ def get_todays_apod() -> Any:
         should_set_wallpaper = wallpaper_setting and wallpaper_setting.get("automatically_set_wallpaper") == "yes"
         if should_set_wallpaper:
             apply_auto_wallpaper_for_single_apod(apod_raw_data)
+            console.print()
 
     elif response.status_code == 404 or response.status_code == 403:
         msg = Text("\nRequest error: ", style="err")
@@ -243,6 +244,7 @@ def get_apod_for_specific_day() -> Any:
                     if should_save_file:
                         console.print()
                         local_file_path = maybe_download_apod_file(apod_raw_data, True)
+                        console.print()
                         if local_file_path:
                             update_local_file_path_in_csv(apod_data['date'], local_file_path)
                             update_local_file_path_in_json(apod_data['date'], local_file_path)
