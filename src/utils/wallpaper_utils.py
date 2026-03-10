@@ -56,7 +56,8 @@ def apply_auto_wallpaper_for_single_apod(apod_data: dict[str, Any]) -> None:
     desktop_resolution = _get_desktop_resolution(is_windows=is_windows)
     image_resolution = _get_image_resolution(local_image_path, is_wsl=is_wsl)
 
-    _print_wallpaper_diagnostics(local_image_path, image_resolution, desktop_resolution)
+    # Uncomment this if you want 'debug' mode for setting image as wallpaper
+    # _print_wallpaper_diagnostics(local_image_path, image_resolution, desktop_resolution)
 
     if is_windows:
         success = _set_wallpaper_windows_native(local_image_path)
