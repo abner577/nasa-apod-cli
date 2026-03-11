@@ -22,11 +22,13 @@ def check_valid_nasa_date(date_object: Any) -> Any:
     """
 
     if date_object < NASA_APOD_START_DATE:
-        return f"Input error: APOD is available starting {NASA_APOD_START_DATE}."
+        msg = Text("\nInput error: ", style="err")
+        msg.append(f"Enter a date after {NASA_APOD_START_DATE}.", style="body.text")
+        console.print(msg)
     elif date_object > DATE_TODAY:
-        return f"Input error: Please enter a date on or before {DATE_TODAY}."
-
-    return None
+        msg = Text("\nInput error: ", style="err")
+        msg.append(f"Enter a date on or before {DATE_TODAY}.", style="body.text")
+        console.print(msg)
 
 def ask_user_for_date() -> Any:
     try:

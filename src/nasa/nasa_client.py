@@ -194,14 +194,7 @@ def get_apod_for_specific_day() -> Any:
                     console.print(Text(str(e), style="err"))
                     continue
 
-                check_result = check_valid_nasa_date(date_object)
-
-                # If an invalid NASA APOD date is entered, try again
-                if check_result is not None:
-                    msg = Text("\nInput error: ", style="err")
-                    msg.append(f"Enter a date after {NASA_APOD_START_DATE}.", style="body.text")
-                    console.print(msg)
-                    continue
+                check_valid_nasa_date(date_object)
 
                 if not check_if_data_exists():
                     msg = Text("Data directory not found. Creating it...\n", style="body.text")
