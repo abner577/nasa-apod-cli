@@ -84,8 +84,6 @@ def parse_global_command(raw: str) -> Optional[CommandMatch]:
         remainder = original[1:]
     elif lowered.startswith("/"):
         remainder = original[1:]
-    elif lowered.startswith("q"):
-        remainder = original[0:]
     else:
         return None
 
@@ -99,25 +97,25 @@ def parse_global_command(raw: str) -> Optional[CommandMatch]:
 
     token = token.replace(" ", "-")
 
-    if token == "help":
+    if token == "help" and not argument:
         return CommandMatch(CMD_HELP)
 
-    if token == "readme":
+    if token == "readme" and not argument:
         return CommandMatch(CMD_README)
 
-    if token in ("quit", "q", "exit"):
+    if token in ("quit", "q", "exit") and not argument:
         return CommandMatch(CMD_QUIT)
 
-    if token in ("auto-redirect", "automatically-redirect"):
+    if token in ("auto-redirect", "automatically-redirect") and not argument:
         return CommandMatch(CMD_AUTO_REDIRECT)
 
     if token in ("auto-wallpaper", "automatically-set-wallpaper"):
         return CommandMatch(CMD_AUTO_WALLPAPER, argument=argument)
 
-    if token == "settings":
+    if token == "settings" and not argument:
         return CommandMatch(CMD_VIEW_SETTINGS)
 
-    if token in ("auto-save", "automatically-save-apod-files"):
+    if token in ("auto-save", "automatically-save-apod-files") and not argument:
         return CommandMatch(CMD_AUTO_SAVE)
 
     return None
