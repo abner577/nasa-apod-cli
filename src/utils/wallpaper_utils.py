@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 import requests
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.text import Text
 
 from src.startup.console import console
@@ -19,8 +22,6 @@ from src.utils.apod_media_utils import (
     infer_extension,
     resolve_direct_media_url,
 )
-
-
 def apply_auto_wallpaper_from_file_path(raw_file_path: str) -> None:
     """Set wallpaper immediately from a user-provided local image file path."""
     cleaned_path = raw_file_path.strip().strip('"').strip("'")
@@ -52,12 +53,23 @@ def apply_auto_wallpaper_from_file_path(raw_file_path: str) -> None:
         console.print(msg)
         return
 
-    _apply_local_image_as_wallpaper(
+    success = _apply_local_image_as_wallpaper_with_progress(
         local_image_path,
         is_windows=is_windows,
         is_macos=is_macos,
         is_wsl=is_wsl,
     )
+    if success:
+        msg = Text("Success: ", style="ok")
+        msg.append("Wallpaper was updated to ", style="body.text")
+        msg.append(local_image_path.name, style="app.primary")
+        msg.append(" ", style="body.text")
+        msg.append("✓", style="ok")
+        console.print(msg)
+    else:
+        msg = Text("Wallpaper update failed: ", style="err")
+        msg.append("Unable to apply wallpaper through OS-specific APIs.", style="body.text")
+        console.print(msg)
 
 
 
@@ -133,6 +145,24 @@ def _apply_local_image_as_wallpaper(
     is_wsl: bool,
 ) -> None:
     """Apply a local image path as wallpaper with existing platform-specific logic."""
+    success = _set_local_image_as_wallpaper(
+        local_image_path,
+        is_windows=is_windows,
+        is_macos=is_macos,
+        is_wsl=is_wsl,
+    )
+
+    if success:
+        msg = Text("Success: ", style="ok")
+        msg.append("Wallpaper was updated", style="body.text")
+        msg.append(" ✓", style="ok")
+        console.print(msg)
+    else:
+        msg = Text("Wallpaper update failed: ", style="err")
+        msg.append("Unable to apply wallpaper through OS-specific APIs.", style="body.text")
+        console.print(msg)
+    return
+
     desktop_resolution = _get_desktop_resolution(is_windows=is_windows, is_macos=is_macos)
     image_resolution = _get_image_resolution(local_image_path, is_wsl=is_wsl, is_macos=is_macos)
 
@@ -155,6 +185,83 @@ def _apply_local_image_as_wallpaper(
         msg = Text("Wallpaper update failed: ", style="err")
         msg.append("Unable to apply wallpaper through OS-specific APIs.", style="body.text")
         console.print(msg)
+
+
+def _apply_local_image_as_wallpaper_with_progress(
+    local_image_path: Path,
+    *,
+    is_windows: bool,
+    is_macos: bool,
+    is_wsl: bool,
+) -> bool:
+    """Show Rich progress while applying a user-provided local image as wallpaper."""
+    progress_total = 100
+    progress_cap_while_running = 92
+    poll_interval_seconds = 0.1
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(
+            _set_local_image_as_wallpaper,
+            local_image_path,
+            is_windows=is_windows,
+            is_macos=is_macos,
+            is_wsl=is_wsl,
+        )
+        with Progress(
+            SpinnerColumn(style="app.primary"),
+            TextColumn(
+                "[body.text]Setting [/body.text][app.primary]{task.fields[file_name]}[/app.primary]"
+                "[body.text] as wallpaper...[/body.text]"
+            ),
+            BarColumn(bar_width=None, complete_style="app.primary", finished_style="ok"),
+            TextColumn("[app.secondary]{task.percentage:>3.0f}%[/app.secondary]"),
+            console=console,
+            transient=True,
+            expand=True,
+        ) as progress:
+            task_id = progress.add_task(
+                "set-wallpaper",
+                total=progress_total,
+                file_name=local_image_path.name,
+            )
+            started_at = time.perf_counter()
+            while not future.done():
+                elapsed_seconds = time.perf_counter() - started_at
+                estimated_progress = min(
+                    progress_cap_while_running,
+                    max(1, int(elapsed_seconds * 45)),
+                )
+                progress.update(task_id, completed=estimated_progress)
+                time.sleep(poll_interval_seconds)
+
+            success = future.result()
+            progress.update(task_id, completed=progress_total)
+
+        return success
+
+
+def _set_local_image_as_wallpaper(
+    local_image_path: Path,
+    *,
+    is_windows: bool,
+    is_macos: bool,
+    is_wsl: bool,
+) -> bool:
+    """Run the existing wallpaper-setting flow and return whether it succeeded."""
+    desktop_resolution = _get_desktop_resolution(is_windows=is_windows, is_macos=is_macos)
+    image_resolution = _get_image_resolution(local_image_path, is_wsl=is_wsl, is_macos=is_macos)
+
+    # Uncomment this if you want 'debug' mode for setting image as wallpaper
+    # _print_wallpaper_diagnostics(local_image_path, image_resolution, desktop_resolution)
+
+    if is_windows:
+        success = _set_wallpaper_windows_native(local_image_path)
+    elif is_macos:
+        success = _set_wallpaper_macos(local_image_path)
+    else:
+        success = _set_wallpaper_through_wsl(local_image_path)
+
+    return success
 
 
 def _resolve_or_download_image_for_date(apod_data: dict[str, Any], date_value: str) -> Path | None:
