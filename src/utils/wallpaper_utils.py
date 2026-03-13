@@ -21,6 +21,48 @@ from src.utils.apod_media_utils import (
 )
 
 
+def apply_auto_wallpaper_from_file_path(raw_file_path: str) -> None:
+    """Set wallpaper immediately from a user-provided local image file path."""
+    cleaned_path = raw_file_path.strip().strip('"').strip("'")
+    if not cleaned_path:
+        msg = Text("Auto-wallpaper skipped: ", style="err")
+        msg.append("No file path was provided.", style="body.text")
+        console.print(msg)
+        return
+
+    local_image_path = Path(cleaned_path).expanduser()
+    if not local_image_path.is_absolute():
+        local_image_path = local_image_path.resolve()
+
+    if not local_image_path.exists() or not local_image_path.is_file():
+        msg = Text("Auto-wallpaper skipped: ", style="err")
+        msg.append("Provided file path does not exist.", style="body.text")
+        console.print(msg)
+        return
+
+    if local_image_path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".tiff"}:
+        msg = Text("Auto-wallpaper skipped: ", style="err")
+        msg.append("Provided file is not a supported image type.", style="body.text")
+        console.print(msg)
+        return
+
+    is_windows = os.name == "nt"
+    is_macos = sys.platform == "darwin"
+    is_wsl = _is_wsl_environment()
+    if not is_windows and not is_wsl and not is_macos:
+        msg = Text("Auto-wallpaper skipped: ", style="app.secondary")
+        msg.append("Wallpaper updates are currently supported on Windows/WSL/macOS.", style="body.text")
+        console.print(msg)
+        return
+
+    _apply_local_image_as_wallpaper(
+        local_image_path,
+        is_windows=is_windows,
+        is_macos=is_macos,
+        is_wsl=is_wsl,
+    )
+
+
 def apply_auto_wallpaper_for_single_apod(apod_data: dict[str, Any]) -> None:
     """Download/reuse an APOD image in Downloads and set it as wallpaper.
 
@@ -55,6 +97,22 @@ def apply_auto_wallpaper_for_single_apod(apod_data: dict[str, Any]) -> None:
     if local_image_path is None:
         return
 
+    _apply_local_image_as_wallpaper(
+        local_image_path,
+        is_windows=is_windows,
+        is_macos=is_macos,
+        is_wsl=is_wsl,
+    )
+
+
+def _apply_local_image_as_wallpaper(
+    local_image_path: Path,
+    *,
+    is_windows: bool,
+    is_macos: bool,
+    is_wsl: bool,
+) -> None:
+    """Apply a local image path as wallpaper with existing platform-specific logic."""
     desktop_resolution = _get_desktop_resolution(is_windows=is_windows, is_macos=is_macos)
     image_resolution = _get_image_resolution(local_image_path, is_wsl=is_wsl, is_macos=is_macos)
 
