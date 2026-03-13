@@ -11,6 +11,7 @@ import os
 
 import requests
 from dotenv import load_dotenv
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.text import Text
 
 from src.startup.console import console
@@ -237,7 +238,6 @@ def get_apod_for_specific_day() -> Any:
                     if should_save_file:
                         console.print()
                         local_file_path = maybe_download_apod_file(apod_raw_data, True)
-                        console.print()
                         if local_file_path:
                             update_local_file_path_in_csv(apod_data['date'], local_file_path)
                             update_local_file_path_in_json(apod_data['date'], local_file_path)
@@ -245,6 +245,7 @@ def get_apod_for_specific_day() -> Any:
                     wallpaper_setting = get_automatically_set_wallpaper()
                     should_set_wallpaper = wallpaper_setting and wallpaper_setting.get("automatically_set_wallpaper") == "yes"
                     if should_set_wallpaper:
+                        console.print()
                         apply_auto_wallpaper_for_single_apod(apod_raw_data)
 
                 elif response.status_code == 404 or response.status_code == 403:
@@ -369,11 +370,41 @@ def get_random_n_apods() -> Any:
 
                         if should_save_file:
                             console.print()
-                            for apod_raw in list_of_unformatted_apod_entries:
-                                local_file_path = maybe_download_apod_file(apod_raw, True)
-                                if local_file_path:
-                                    update_local_file_path_in_csv(apod_raw['date'], local_file_path)
-                                    update_local_file_path_in_json(apod_raw['date'], local_file_path)
+                            apods_to_save = [
+                                apod_raw for apod_raw in list_of_unformatted_apod_entries
+                                if not _get_existing_local_file_path(apod_raw)
+                            ]
+                            if apods_to_save:
+                                with Progress(
+                                    SpinnerColumn(style="app.primary"),
+                                    TextColumn(
+                                        "[body.text]Saving [/body.text][app.primary]{task.fields[file_count]}[/app.primary]"
+                                        "[body.text] APOD files to Downloads...[/body.text]"
+                                    ),
+                                    BarColumn(bar_width=None, complete_style="app.primary", finished_style="ok"),
+                                    TextColumn("[app.secondary]{task.percentage:>3.0f}%[/app.secondary]"),
+                                    console=console,
+                                    transient=True,
+                                    expand=True,
+                                ) as progress:
+                                    task_id = progress.add_task(
+                                        "save-random-apods",
+                                        total=len(apods_to_save),
+                                        file_count=str(len(apods_to_save)),
+                                    )
+                                    for apod_raw in list_of_unformatted_apod_entries:
+                                        if _get_existing_local_file_path(apod_raw):
+                                            maybe_download_apod_file(apod_raw, True, show_progress=False)
+                                            continue
+
+                                        local_file_path = maybe_download_apod_file(apod_raw, True, show_progress=False)
+                                        if local_file_path:
+                                            update_local_file_path_in_csv(apod_raw['date'], local_file_path)
+                                            update_local_file_path_in_json(apod_raw['date'], local_file_path)
+                                        progress.advance(task_id)
+                            else:
+                                for apod_raw in list_of_unformatted_apod_entries:
+                                    maybe_download_apod_file(apod_raw, True, show_progress=False)
 
                     elif response.status_code == 404 or response.status_code == 403:
                         msg = Text("\nRequest error: ", style="err")
