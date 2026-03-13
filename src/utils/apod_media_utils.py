@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlparse
 
 
 import requests
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.text import Text
 
 from src.startup.console import console
@@ -310,7 +311,7 @@ def _get_existing_local_file_path(apod_data: dict[str, Any]) -> str:
     return existing_path
 
 
-def download_apod_file(apod_data: dict) -> str | None:
+def download_apod_file(apod_data: dict, *, show_progress: bool = True) -> str | None:
     """Download APOD media to disk and return the saved file path when successful.
 
     This function validates the APOD date, skips duplicate
@@ -395,20 +396,60 @@ def download_apod_file(apod_data: dict) -> str | None:
 
         file_path = build_download_path(date_value, extension)
 
-        first_chunk_logged = False
-        with open(file_path, "wb") as output_file:
-            for chunk in response.iter_content(chunk_size=8192):
-                if not chunk:
-                    continue
+        first_chunk = next(response.iter_content(chunk_size=8192), b"")
+        if media_type == "video" and first_chunk:
+            hex_preview = first_chunk[:32].hex()
+            _debug_video(f"First 32 bytes hex preview: {hex_preview}")
 
-                if media_type == "video" and not first_chunk_logged:
-                    hex_preview = chunk[:32].hex()
-                    _debug_video(f"First 32 bytes hex preview: {hex_preview}")
-                    first_chunk_logged = True
+        total_bytes_header = response.headers.get("content-length", "").strip()
+        try:
+            total_bytes = int(total_bytes_header)
+        except ValueError:
+            total_bytes = 0
 
-                output_file.write(chunk)
+        initial_bytes = len(first_chunk)
+        progress_total = total_bytes if total_bytes > 0 else max(100, initial_bytes or 1)
+        show_estimated_progress = total_bytes <= 0
 
-        if media_type == "video" and not first_chunk_logged:
+        if show_progress:
+            with Progress(
+                SpinnerColumn(style="app.primary"),
+                TextColumn(
+                    "[body.text]Saving [/body.text][app.primary]{task.fields[file_name]}[/app.primary]"
+                    "[body.text] to Downloads...[/body.text]"
+                ),
+                BarColumn(bar_width=None, complete_style="app.primary", finished_style="ok"),
+                TextColumn("[app.secondary]{task.percentage:>3.0f}%[/app.secondary]"),
+                console=console,
+                transient=True,
+                expand=True,
+            ) as progress:
+                task_id = progress.add_task(
+                    "save-apod-file",
+                    total=progress_total,
+                    file_name=file_path.name,
+                )
+                _write_apod_file_chunks(
+                    response,
+                    file_path,
+                    first_chunk,
+                    progress,
+                    task_id,
+                    progress_total,
+                    show_estimated_progress,
+                )
+        else:
+            _write_apod_file_chunks(
+                response,
+                file_path,
+                first_chunk,
+                None,
+                None,
+                progress_total,
+                show_estimated_progress,
+            )
+
+        if media_type == "video" and not first_chunk:
             _debug_video("No data chunks were received while saving video file.")
 
         msg = Text("Saved file: ", style="app.secondary")
@@ -431,7 +472,46 @@ def download_apod_file(apod_data: dict) -> str | None:
     return None
 
 
-def maybe_download_apod_file(apod_data: dict, save_enabled: bool) -> str | None:
+def _write_apod_file_chunks(
+    response: requests.Response,
+    file_path: Path,
+    first_chunk: bytes,
+    progress: Progress | None,
+    task_id: int | None,
+    progress_total: int,
+    show_estimated_progress: bool,
+) -> None:
+    """Write APOD response chunks to disk and update progress when supplied."""
+    initial_bytes = len(first_chunk)
+    with open(file_path, "wb") as output_file:
+        if first_chunk:
+            output_file.write(first_chunk)
+            if progress is not None and task_id is not None:
+                if show_estimated_progress:
+                    progress.update(task_id, completed=min(92, max(1, int(initial_bytes / 8192))))
+                else:
+                    progress.update(task_id, completed=min(initial_bytes, progress_total))
+
+        written_bytes = initial_bytes
+        for chunk in response.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+
+            output_file.write(chunk)
+            written_bytes += len(chunk)
+
+            if progress is not None and task_id is not None:
+                if show_estimated_progress:
+                    estimated_progress = min(92, max(1, int(written_bytes / 8192)))
+                    progress.update(task_id, completed=estimated_progress)
+                else:
+                    progress.update(task_id, completed=min(written_bytes, progress_total))
+
+    if progress is not None and task_id is not None:
+        progress.update(task_id, completed=progress_total)
+
+
+def maybe_download_apod_file(apod_data: dict, save_enabled: bool, *, show_progress: bool = True) -> str | None:
     """Conditionally download APOD media based on the current save preference.
 
     This acts as a small guard: when saving is disabled it immediately returns
@@ -440,4 +520,4 @@ def maybe_download_apod_file(apod_data: dict, save_enabled: bool) -> str | None:
     """
     if not save_enabled:
         return None
-    return download_apod_file(apod_data)
+    return download_apod_file(apod_data, show_progress=show_progress)
