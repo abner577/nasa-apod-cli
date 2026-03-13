@@ -79,3 +79,21 @@ def stylize_line(text: Text) -> None:
             break
         text.stylize("app.primary", i, i + 5)
         start = i + 5
+
+    version_label = "Version: "
+    version_start = s.find(version_label)
+    if version_start != -1:
+        value_start = version_start + len(version_label)
+        value_end = s.find(" ", value_start)
+        if value_end == -1:
+            value_end = len(s)
+        text.stylize("app.primary", value_start, value_end)
+
+    readme_start = s.find("README")
+    if readme_start != -1:
+        text.stylize("app.primary", readme_start, readme_start + len("README"))
+
+    tips_label = "Tips for getting started:"
+    tips_start = s.find(tips_label)
+    if tips_start != -1:
+        text.stylize("app.secondary", tips_start, tips_start + len(tips_label))
