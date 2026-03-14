@@ -7,6 +7,7 @@ import re
 import subprocess
 from html import unescape
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 
@@ -324,7 +325,7 @@ def download_apod_file(apod_data: dict, *, show_progress: bool = True) -> str | 
         return None
 
     if check_if_date_file_exists(date_value):
-        msg = Text("Skipped (duplicate file): ", style="app.secondary")
+        msg = Text("Skipped file download: ", style="app.secondary")
         msg.append(f"apod-{date_value}", style="app.primary")
         msg.append(" already exists in downloads.", style="body.text")
         console.print(msg)
@@ -339,15 +340,22 @@ def download_apod_file(apod_data: dict, *, show_progress: bool = True) -> str | 
 
     try:
         media_type = str(apod_data.get("media_type", "")).strip().lower()
-        if media_type == "video":
-            _debug_video(f"Initial APOD media URL: {media_url}")
 
         response = requests.get(media_url, stream=True, timeout=20)
         response.raise_for_status()
 
         extension = infer_extension(response, media_url)
 
+        _debug_video(
+            "Initial response details: "
+            f"status={response.status_code}, final_url={response.url}, "
+            f"content-type={response.headers.get('content-type', '')}, "
+            f"content-length={response.headers.get('content-length', '')}, "
+            f"inferred_extension={extension}"
+        )
+
         if media_type == "video":
+            _debug_video(f"Initial APOD media URL: {media_url}")
             _debug_video(
                 "Initial response details: "
                 f"status={response.status_code}, final_url={response.url}, "
@@ -384,7 +392,7 @@ def download_apod_file(apod_data: dict, *, show_progress: bool = True) -> str | 
                     f"content-type={content_type or '<empty>'}, final_url={response.url}"
                 )
 
-                msg = Text("Skipped (video APOD): ", style="app.secondary")
+                msg = Text("Skipped file download (video APOD): ", style="app.secondary")
                 msg.append(
                     "This APOD is hosted on YouTube, so automatic download is not available.", style="body.text")
                 console.print(msg)
@@ -460,8 +468,9 @@ def download_apod_file(apod_data: dict, *, show_progress: bool = True) -> str | 
         return str(file_path)
 
     except requests.RequestException as e:
-        msg = Text("Media save failed: ", style="err")
-        msg.append(str(e), style="body.text")
+        msg = Text("Skipped file download (video APOD): ", style="app.secondary")
+        msg.append(
+            "This APOD is hosted on a streaming website, so automatic download is not available.", style="body.text")
         console.print(msg)
 
     except OSError as e:

@@ -144,8 +144,9 @@ def check_for_duplicate_json_entries(formatted_apod_data: Any) -> Any:
 
                 content = json.loads(line)
                 if content['date'] == formatted_apod_data['date']:
-                    msg = Text("Skipped (duplicate entry): ", style="app.secondary")
-                    msg.append(str(content["date"]), style="app.primary")
+                    apod_name = f'apod-{formatted_apod_data["date"]}'
+                    msg = Text("Skipped logging: ", style="app.secondary")
+                    msg.append(apod_name, style="app.primary")
                     msg.append(" already exists in ", style="body.text")
                     msg.append(str(json_file_name), style="app.primary")
                     msg.append(".", style="body.text")
