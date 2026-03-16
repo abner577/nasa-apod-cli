@@ -1,6 +1,6 @@
 # NASA APOD CLI
 
-A CLI application that wraps the [NASA Astronomy Picture of the Day (APOD) API](https://api.nasa.gov/) and additional functionality for:
+A CLI application that wraps the [NASA Astronomy Picture of the Day (APOD) API](https://api.nasa.gov/) and provides additional functionality for:
 
 - requesting APOD data (today, date-based, or random batch),
 - logging APOD metadata to JSONL and CSV,
