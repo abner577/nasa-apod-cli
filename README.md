@@ -1,6 +1,6 @@
 # NASA APOD CLI
 
-A CLI application that wraps the [NASA Astronomy Picture of the Day (APOD) API](https://api.nasa.gov/) and adds local tooling for:
+A CLI application that wraps the [NASA Astronomy Picture of the Day (APOD) API](https://api.nasa.gov/) and additional functionality for:
 
 - requesting APOD data (today, date-based, or random batch),
 - logging APOD metadata to JSONL and CSV,
@@ -35,7 +35,7 @@ A CLI application that wraps the [NASA Astronomy Picture of the Day (APOD) API](
   - [NASA APOD Requests](#nasa-apod-requests)
   - [Log & File Tools](#log--file-tools)
   - [Preferences](#preferences)
-  - [Global Commands (available from prompts)](#global-commands-available-from-prompts)
+  - [Global Commands](#global-commands)
 - [Output Files and Data](#output-files-and-data)
 - [Troubleshooting](#troubleshooting)
 
@@ -55,7 +55,6 @@ When you request APOD data, the CLI:
 6. optionally downloads media locally,
 7. optionally sets wallpaper for image APODs.
 
-It is designed for developers who want a usable CLI wrapper with persistent logs and local OS integrations.
 
 ---
 
@@ -339,7 +338,7 @@ Inside **Preferences**:
 4. Change auto-save-apod-files setting
 5. Return to Main Menu
 
-### Global Commands (available from prompts)
+### Global Commands
 
 These can be entered from menu prompts:
 
