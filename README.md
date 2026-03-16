@@ -25,10 +25,6 @@ A developer-facing, interactive command-line application that wraps the [NASA As
   - [6) Install dependencies](#6-install-dependencies)
   - [7) Configure environment variables](#7-configure-environment-variables)
   - [8) Run the CLI](#8-run-the-cli)
-- [OS-Specific Setup Notes](#os-specific-setup-notes)
-  - [Windows](#windows)
-  - [macOS](#macos)
-  - [Linux](#linux)
 - [Configuration](#configuration)
   - [Environment Variables (`.env`)](#environment-variables-env)
   - [Runtime User Settings (`data/settings.jsonl`)](#runtime-user-settings-datasettingsjsonl)
@@ -128,6 +124,8 @@ If your system maps Python 3 to `python3`, run:
 python3 --version
 ```
 
+If Python is missing, install it from the official downloads page: <https://www.python.org/downloads/>.
+
 ### 2) Verify pip is installed
 
 ```bash
@@ -140,11 +138,15 @@ If needed:
 python -m pip --version
 ```
 
+If pip is missing, follow the official installation guide: <https://pip.pypa.io/en/stable/installation/>.
+
 ### 3) Verify Git is installed
 
 ```bash
 git --version
 ```
+
+If Git is missing, install it from: <https://git-scm.com/downloads>.
 
 ### 4) Clone the repository
 
@@ -176,6 +178,8 @@ Activate:
   source .venv/bin/activate
   ```
 
+If virtual environment activation fails, ensure your shell is using Python 3 and recreate it with `python -m venv .venv` (or `python3 -m venv .venv`).
+
 ### 6) Install dependencies
 
 ```bash
@@ -202,81 +206,13 @@ Notes:
 python src/main.py
 ```
 
+If your environment requires explicit module execution from the repository root, use:
+
+```bash
+python -m src.main
+```
+
 On first run, startup checks create missing runtime files under `data/` automatically.
-
----
-
-## OS-Specific Setup Notes
-
-### Windows
-
-1. Install Python from python.org and make sure **"Add Python to PATH"** is enabled.
-2. Confirm tools:
-   ```powershell
-   python --version
-   pip --version
-   git --version
-   ```
-3. Create venv and activate in PowerShell:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-4. If script execution is blocked, run once in your user scope:
-   ```powershell
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-   ```
-5. Install dependencies, configure `.env`, and run:
-   ```powershell
-   pip install -r requirements.txt
-   python src/main.py
-   ```
-
-Wallpaper uses native Windows API flow; auto-saved APOD media goes to your global `Downloads` folder.
-
-### macOS
-
-1. Verify Apple-provided tools or install Homebrew equivalents.
-2. Confirm tools:
-   ```bash
-   python3 --version
-   pip3 --version
-   git --version
-   ```
-3. Create and activate venv:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-4. Install dependencies and run:
-   ```bash
-   pip install -r requirements.txt
-   python src/main.py
-   ```
-
-Wallpaper integration uses AppleScript (`osascript`) and supports image APODs.
-
-### Linux
-
-1. Ensure Python, pip, and Git are installed from your distro package manager.
-2. Confirm tools:
-   ```bash
-   python3 --version
-   pip3 --version
-   git --version
-   ```
-3. Create and activate venv:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-4. Install dependencies and run:
-   ```bash
-   pip install -r requirements.txt
-   python src/main.py
-   ```
-
-On WSL, browser and Downloads-path handling is WSL-aware so files/opened viewer URIs map to Windows-friendly paths where possible.
 
 ---
 
